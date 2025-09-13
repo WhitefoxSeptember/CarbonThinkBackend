@@ -1,0 +1,31 @@
+# Core Django framework
+Django>=4.2.0,<5.0.0
+
+# Environment variables
+python-dotenv>=1.0.0
+
+# Database drivers
+psycopg2-binary>=2.9.0  # PostgreSQL driver for Supabase
+supabase>=1.0.0  # Supabase Python client
+# mysqlclient>=2.1.0  # Uncomment for MySQL
+
+# CORS handling
+django-cors-headers>=4.0.0
+
+# API and serialization
+djangorestframework>=3.14.0
+
+# Authentication and security
+django-allauth>=0.54.0
+
+# Development and debugging (optional)
+# django-debug-toolbar>=4.0.0
+# django-extensions>=3.2.0
+
+# Production server (optional)
+# gunicorn>=21.0.0
+# whitenoise>=6.5.0
+
+# Testing (optional)
+# pytest-django>=4.5.0
+# factory-boy>=3.3.0

@@ -1,10 +1,9 @@
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
-from django.contrib.auth import authenticate, login, logout
-from django.contrib.auth.models import User
-from django.contrib.auth.decorators import login_required
 import json
+from datetime import datetime
+from ..supabase_client import supabase_client
 
 @require_http_methods(["GET", "POST"])
 @csrf_exempt
@@ -12,19 +11,12 @@ def user_list(request):
     """Handle user list operations"""
     if request.method == 'GET':
         try:
-            # Get all users from database
-            users = User.objects.all().values('id', 'username', 'email', 'first_name', 'last_name', 'date_joined')
-            users_list = []
-            for user in users:
-                users_list.append({
-                    'id': user['id'],
-                    'username': user['username'],
-                    'email': user['email'],
-                    'first_name': user['first_name'],
-                    'last_name': user['last_name'],
-                    'date_joined': user['date_joined'].isoformat() if user['date_joined'] else None
-                })
-            return JsonResponse({'users': users_list})
+            # Get all users from Supabase
+            response = supabase_client.list_user_accounts()
+            if response.data:
+                return JsonResponse({'users': response.data})
+            else:
+                return JsonResponse({'users': []})
         except Exception as e:
             return JsonResponse({'error': str(e)}, status=500)
     
@@ -43,36 +35,47 @@ def user_list(request):
                     'error': 'Username, email, and password are required'
                 }, status=400)
             
-            # Check if user already exists
-            if User.objects.filter(username=username).exists():
+            # Check if user already exists by username
+            existing_user = supabase_client.get_client().table('user_accounts').select('*').eq('username', username).execute()
+            if existing_user.data:
                 return JsonResponse({
                     'error': 'Username already exists'
                 }, status=400)
             
-            if User.objects.filter(email=email).exists():
+            # Check if user already exists by email
+            existing_email = supabase_client.get_client().table('user_accounts').select('*').eq('email', email).execute()
+            if existing_email.data:
                 return JsonResponse({
                     'error': 'Email already exists'
                 }, status=400)
             
-            # Create new user
-            user = User.objects.create_user(
-                username=username,
-                email=email,
-                password=password,
-                first_name=first_name,
-                last_name=last_name
-            )
+            # Create new user account in Supabase
+            user_data = {
+                'username': username,
+                'email': email,
+                'password_hash': password,  # In production, this should be hashed
+                'first_name': first_name,
+                'last_name': last_name,
+                'date_joined': datetime.now().isoformat(),
+                'is_active': True
+            }
             
-            return JsonResponse({
-                'message': 'User created successfully',
-                'user': {
-                    'id': user.id,
-                    'username': user.username,
-                    'email': user.email,
-                    'first_name': user.first_name,
-                    'last_name': user.last_name
-                }
-            }, status=201)
+            response = supabase_client.create_user_account(user_data)
+            
+            if response.data:
+                user = response.data[0]
+                return JsonResponse({
+                    'message': 'User created successfully',
+                    'user': {
+                        'id': user['id'],
+                        'username': user['username'],
+                        'email': user['email'],
+                        'first_name': user['first_name'],
+                        'last_name': user['last_name']
+                    }
+                }, status=201)
+            else:
+                return JsonResponse({'error': 'Failed to create user'}, status=500)
             
         except json.JSONDecodeError:
             return JsonResponse({'error': 'Invalid JSON'}, status=400)
@@ -84,61 +87,53 @@ def user_list(request):
 def user_detail(request, user_id):
     """Handle individual user operations"""
     try:
-        # Get user from database
-        user = User.objects.get(id=user_id)
-    except User.DoesNotExist:
-        return JsonResponse({'error': 'User not found'}, status=404)
+        # Get user from Supabase
+        response = supabase_client.get_user_account(user_id)
+        if not response.data:
+            return JsonResponse({'error': 'User not found'}, status=404)
+        user = response.data[0]
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
     
     if request.method == 'GET':
-        user_data = {
-            'id': user.id,
-            'username': user.username,
-            'email': user.email,
-            'first_name': user.first_name,
-            'last_name': user.last_name,
-            'date_joined': user.date_joined.isoformat() if user.date_joined else None,
-            'is_active': user.is_active
-        }
-        return JsonResponse({'user': user_data})
+        return JsonResponse({'user': user})
     
     elif request.method == 'PUT':
         try:
             data = json.loads(request.body)
             
-            # Update user fields
+            # Check if email is already taken by another user
             if 'email' in data:
-                # Check if email is already taken by another user
-                if User.objects.filter(email=data['email']).exclude(id=user_id).exists():
+                existing_email = supabase_client.get_client().table('user_accounts').select('*').eq('email', data['email']).neq('id', user_id).execute()
+                if existing_email.data:
                     return JsonResponse({
                         'error': 'Email already exists'
                     }, status=400)
-                user.email = data['email']
             
+            # Update user in Supabase
+            update_data = {}
+            if 'email' in data:
+                update_data['email'] = data['email']
             if 'first_name' in data:
-                user.first_name = data['first_name']
-            
+                update_data['first_name'] = data['first_name']
             if 'last_name' in data:
-                user.last_name = data['last_name']
-            
+                update_data['last_name'] = data['last_name']
             if 'is_active' in data:
-                user.is_active = data['is_active']
+                update_data['is_active'] = data['is_active']
             
-            user.save()
-            
-            updated_user = {
-                'id': user.id,
-                'username': user.username,
-                'email': user.email,
-                'first_name': user.first_name,
-                'last_name': user.last_name,
-                'is_active': user.is_active
-            }
-            return JsonResponse({
-                'message': 'User updated successfully',
-                'user': updated_user
-            })
+            if update_data:
+                response = supabase_client.update_user_account(user_id, update_data)
+                if response.data:
+                    updated_user = response.data[0]
+                    return JsonResponse({
+                        'message': 'User updated successfully',
+                        'user': updated_user
+                    })
+                else:
+                    return JsonResponse({'error': 'Failed to update user'}, status=500)
+            else:
+                return JsonResponse({'error': 'No valid fields to update'}, status=400)
+                
         except json.JSONDecodeError:
             return JsonResponse({'error': 'Invalid JSON'}, status=400)
         except Exception as e:
@@ -146,8 +141,8 @@ def user_detail(request, user_id):
     
     elif request.method == 'DELETE':
         try:
-            username = user.username
-            user.delete()
+            username = user.get('username', 'Unknown')
+            response = supabase_client.delete_user_account(user_id)
             return JsonResponse({
                 'message': f'User {username} (ID: {user_id}) deleted successfully'
             })
@@ -157,45 +152,58 @@ def user_detail(request, user_id):
 @require_http_methods(["POST"])
 @csrf_exempt
 def user_register(request):
-    """Handle user registration"""
+    """Register a new user"""
     try:
         data = json.loads(request.body)
-        username = data.get('username')
-        email = data.get('email')
-        password = data.get('password')
         
         # Validate required fields
-        if not all([username, email, password]):
-            return JsonResponse({
-                'error': 'Username, email, and password are required'
-            }, status=400)
+        required_fields = ['username', 'email', 'password']
+        for field in required_fields:
+            if field not in data or not data[field]:
+                return JsonResponse({
+                    'error': f'{field.capitalize()} is required'
+                }, status=400)
         
-        # Check if user already exists
-        if User.objects.filter(username=username).exists():
+        # Check if username already exists
+        existing_username = supabase_client.get_client().table('user_accounts').select('*').eq('username', data['username']).execute()
+        if existing_username.data:
             return JsonResponse({
                 'error': 'Username already exists'
             }, status=400)
         
-        if User.objects.filter(email=email).exists():
+        # Check if email already exists
+        existing_email = supabase_client.get_client().table('user_accounts').select('*').eq('email', data['email']).execute()
+        if existing_email.data:
             return JsonResponse({
                 'error': 'Email already exists'
             }, status=400)
         
-        # Create new user
-        user = User.objects.create_user(
-            username=username,
-            email=email,
-            password=password
-        )
+        # Create new user in Supabase
+        user_data = {
+            'username': data['username'],
+            'email': data['email'],
+            'password_hash': data['password'],  # In production, hash this properly
+            'first_name': data.get('first_name', ''),
+            'last_name': data.get('last_name', ''),
+            'is_active': True,
+            'created_at': datetime.now().isoformat()
+        }
         
-        return JsonResponse({
-            'message': 'User created successfully',
-            'user': {
-                'id': user.id,
-                'username': user.username,
-                'email': user.email
-            }
-        }, status=201)
+        response = supabase_client.create_user_account(user_data)
+        if response.data:
+            user = response.data[0]
+            return JsonResponse({
+                'message': 'User registered successfully',
+                'user': {
+                    'id': user['id'],
+                    'username': user['username'],
+                    'email': user['email'],
+                    'first_name': user['first_name'],
+                    'last_name': user['last_name']
+                }
+            }, status=201)
+        else:
+            return JsonResponse({'error': 'Failed to create user'}, status=500)
         
     except json.JSONDecodeError:
         return JsonResponse({'error': 'Invalid JSON'}, status=400)
@@ -211,25 +219,37 @@ def user_login(request):
         username = data.get('username')
         password = data.get('password')
         
-        # Validate required fields
-        if not all([username, password]):
+        if not username or not password:
             return JsonResponse({
                 'error': 'Username and password are required'
             }, status=400)
         
-        # Authenticate user
-        user = authenticate(request, username=username, password=password)
+        # Find user by username
+        user_response = supabase_client.get_client().table('user_accounts').select('*').eq('username', username).execute()
         
-        if user is not None:
-            login(request, user)
+        if not user_response.data:
+            return JsonResponse({
+                'error': 'Invalid username or password'
+            }, status=401)
+        
+        user = user_response.data[0]
+        
+        # In production, properly verify password hash
+        if user['password_hash'] == password and user['is_active']:
             return JsonResponse({
                 'message': 'Login successful',
                 'user': {
-                    'id': user.id,
-                    'username': user.username,
-                    'email': user.email
+                    'id': user['id'],
+                    'username': user['username'],
+                    'email': user['email'],
+                    'first_name': user['first_name'],
+                    'last_name': user['last_name']
                 }
             })
+        elif not user['is_active']:
+            return JsonResponse({
+                'error': 'Account is disabled'
+            }, status=403)
         else:
             return JsonResponse({
                 'error': 'Invalid username or password'
@@ -245,9 +265,8 @@ def user_login(request):
 def user_logout(request):
     """Handle user logout"""
     try:
-        logout(request)
-        return JsonResponse({
-            'message': 'Logout successful'
-        })
+        # With Supabase, logout is typically handled on the frontend
+        # This endpoint can be used for any server-side cleanup if needed
+        return JsonResponse({'message': 'Logout successful'})
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)

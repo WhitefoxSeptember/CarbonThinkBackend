@@ -11,6 +11,11 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
 from pathlib import Path
+import os
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -20,12 +25,12 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-2-w8$gzf=u!r2l10i!5h+msil1p_&#_pcfu9a_d!s#g&_cv+#h'
+SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-2-w8$gzf=u!r2l10i!5h+msil1p_&#_pcfu9a_d!s#g&_cv+#h')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.getenv('DEBUG', 'True').lower() == 'true'
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '').split(',') if os.getenv('ALLOWED_HOSTS') else []
 
 
 # Application definition
@@ -73,6 +78,8 @@ WSGI_APPLICATION = 'carbonthink.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
+# Using SQLite for Django's internal operations (sessions, admin, etc.)
+# Data operations will be handled through Supabase REST API
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
