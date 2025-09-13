@@ -2,6 +2,7 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 import json
+import uuid
 from ..supabase_client import supabase_client
 
 @require_http_methods(["GET", "POST"])
@@ -10,8 +11,8 @@ def source_list(request):
     """Handle carbon source list operations"""
     if request.method == 'GET':
         try:
-            # Get carbon sources from Supabase
-            response = supabase_client.get_client().table('carbon_sources').select('*').execute()
+            # Get carbon sources from Supabase (excluding emission_factor and unit)
+            response = supabase_client.get_client().table('carbon_sources').select('uid, name, description, source_type, created_at, updated_at').execute()
             sources = response.data or []
             return JsonResponse({'sources': sources})
         except Exception as e:
@@ -22,20 +23,19 @@ def source_list(request):
             data = json.loads(request.body)
             
             # Validate required fields
-            required_fields = ['name', 'category', 'emission_factor']
+            required_fields = ['name', 'source_type']
             for field in required_fields:
                 if field not in data or data[field] is None:
                     return JsonResponse({
-                        'error': f'{field.capitalize()} is required'
+                        'error': f'{field.replace("_", " ").capitalize()} is required'
                     }, status=400)
             
             # Create carbon source in Supabase
             source_data = {
+                'uid': str(uuid.uuid4()),
                 'name': data['name'],
-                'category': data['category'],
-                'emission_factor': float(data['emission_factor']),
-                'description': data.get('description', ''),
-                'unit': data.get('unit', 'kg CO2')
+                'source_type': data['source_type'],
+                'description': data.get('description', '')
             }
             
             response = supabase_client.get_client().table('carbon_sources').insert(source_data).execute()
@@ -50,8 +50,6 @@ def source_list(request):
                 
         except json.JSONDecodeError:
             return JsonResponse({'error': 'Invalid JSON'}, status=400)
-        except ValueError:
-            return JsonResponse({'error': 'Invalid emission factor value'}, status=400)
         except Exception as e:
             return JsonResponse({'error': str(e)}, status=500)
 
@@ -60,8 +58,8 @@ def source_list(request):
 def source_detail(request, source_id):
     """Handle individual carbon source operations"""
     try:
-        # Get carbon source from Supabase
-        response = supabase_client.get_client().table('carbon_sources').select('*').eq('uid', source_id).execute()
+        # Get carbon source from Supabase (excluding emission_factor and unit)
+        response = supabase_client.get_client().table('carbon_sources').select('uid, name, description, source_type, created_at, updated_at').eq('uid', source_id).execute()
         if not response.data:
             return JsonResponse({'error': 'Carbon source not found'}, status=404)
         
@@ -80,14 +78,10 @@ def source_detail(request, source_id):
             update_data = {}
             if 'name' in data:
                 update_data['name'] = data['name']
-            if 'category' in data:
-                update_data['category'] = data['category']
-            if 'emission_factor' in data:
-                update_data['emission_factor'] = float(data['emission_factor'])
+            if 'source_type' in data:
+                update_data['source_type'] = data['source_type']
             if 'description' in data:
                 update_data['description'] = data['description']
-            if 'unit' in data:
-                update_data['unit'] = data['unit']
             
             if update_data:
                 # Update carbon source in Supabase
@@ -105,8 +99,6 @@ def source_detail(request, source_id):
                 
         except json.JSONDecodeError:
             return JsonResponse({'error': 'Invalid JSON'}, status=400)
-        except ValueError:
-            return JsonResponse({'error': 'Invalid emission factor value'}, status=400)
         except Exception as e:
             return JsonResponse({'error': str(e)}, status=500)
     
@@ -149,26 +141,34 @@ def calculate_footprint(request):
         if not activity_amount or activity_amount <= 0:
             return JsonResponse({'error': 'Valid activity amount is required'}, status=400)
         
-        # Get carbon source from Supabase to fetch emission factor
+        # Get carbon source from Supabase to verify it exists
         source_response = supabase_client.get_client().table('carbon_sources').select('*').eq('uid', source_id).execute()
         
         if not source_response.data:
             return JsonResponse({'error': 'Carbon source not found'}, status=404)
         
         source = source_response.data[0]
-        emission_factor = float(source['emission_factor'])
         
-        # Calculate carbon footprint
-        carbon_footprint = float(activity_amount) * emission_factor
+        # Simple calculation using a default emission factor based on category
+        category_factors = {
+            'transportation': 0.21,  # kg CO2 per km
+            'energy': 0.45,         # kg CO2 per kWh
+            'food': 2.5,            # kg CO2 per kg
+            'waste': 0.5            # kg CO2 per kg
+        }
+        
+        default_factor = category_factors.get(source['source_type'].lower(), 1.0)
+        carbon_footprint = float(activity_amount) * default_factor
         
         return JsonResponse({
             'carbon_footprint': carbon_footprint,
-            'unit': source.get('unit', 'kg CO2'),
+            'unit': 'kg CO2',
             'calculation': {
                 'amount': activity_amount,
-                'emission_factor': emission_factor,
+                'default_factor': default_factor,
                 'source_id': source_id,
-                'source_name': source['name']
+                'source_name': source['name'],
+                'source_type': source['source_type']
             }
         })
     except json.JSONDecodeError:
