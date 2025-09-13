@@ -116,12 +116,10 @@ def source_detail(request, source_id):
 @csrf_exempt
 def source_categories(request):
     """Get carbon source categories"""
-    # Placeholder for source categories
     categories = [
-        {'name': 'transportation', 'description': 'Vehicle and travel emissions'},
-        {'name': 'energy', 'description': 'Electricity and heating emissions'},
-        {'name': 'food', 'description': 'Food production and consumption emissions'},
-        {'name': 'waste', 'description': 'Waste disposal and recycling emissions'}
+        {'name': 'Travel', 'description': 'Transportation and travel-related emissions'},
+        {'name': 'Dining & Shopping', 'description': 'Food, retail, and shopping emissions'},
+        {'name': 'Utility & Bills', 'description': 'Utilities, bills, and household services emissions'}
     ]
     return JsonResponse({'categories': categories})
 
@@ -151,13 +149,12 @@ def calculate_footprint(request):
         
         # Simple calculation using a default emission factor based on category
         category_factors = {
-            'transportation': 0.21,  # kg CO2 per km
-            'energy': 0.45,         # kg CO2 per kWh
-            'food': 2.5,            # kg CO2 per kg
-            'waste': 0.5            # kg CO2 per kg
+            'Travel': 2.3,              # kg CO2
+            'Dining & Shopping': 1.5,   # kg CO2
+            'Utility & Bills': 0.8      # kg CO2
         }
         
-        default_factor = category_factors.get(source['source_type'].lower(), 1.0)
+        default_factor = category_factors.get(source['source_type'], 1.0)
         carbon_footprint = float(activity_amount) * default_factor
         
         return JsonResponse({
