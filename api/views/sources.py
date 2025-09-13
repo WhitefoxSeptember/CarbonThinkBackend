@@ -61,7 +61,7 @@ def source_detail(request, source_id):
     """Handle individual carbon source operations"""
     try:
         # Get carbon source from Supabase
-        response = supabase_client.get_client().table('carbon_sources').select('*').eq('id', source_id).execute()
+        response = supabase_client.get_client().table('carbon_sources').select('*').eq('uid', source_id).execute()
         if not response.data:
             return JsonResponse({'error': 'Carbon source not found'}, status=404)
         
@@ -91,7 +91,7 @@ def source_detail(request, source_id):
             
             if update_data:
                 # Update carbon source in Supabase
-                response = supabase_client.get_client().table('carbon_sources').update(update_data).eq('id', source_id).execute()
+                response = supabase_client.get_client().table('carbon_sources').update(update_data).eq('uid', source_id).execute()
                 
                 if response.data:
                     return JsonResponse({
@@ -113,7 +113,7 @@ def source_detail(request, source_id):
     elif request.method == 'DELETE':
         try:
             # Delete carbon source from Supabase
-            response = supabase_client.get_client().table('carbon_sources').delete().eq('id', source_id).execute()
+            response = supabase_client.get_client().table('carbon_sources').delete().eq('uid', source_id).execute()
             return JsonResponse({
                 'message': f'Carbon source {source_id} deleted successfully'
             })
@@ -150,7 +150,7 @@ def calculate_footprint(request):
             return JsonResponse({'error': 'Valid activity amount is required'}, status=400)
         
         # Get carbon source from Supabase to fetch emission factor
-        source_response = supabase_client.get_client().table('carbon_sources').select('*').eq('id', source_id).execute()
+        source_response = supabase_client.get_client().table('carbon_sources').select('*').eq('uid', source_id).execute()
         
         if not source_response.data:
             return JsonResponse({'error': 'Carbon source not found'}, status=404)
@@ -175,5 +175,206 @@ def calculate_footprint(request):
         return JsonResponse({'error': 'Invalid JSON'}, status=400)
     except ValueError:
         return JsonResponse({'error': 'Invalid numeric values'}, status=400)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+@require_http_methods(["POST"])
+@csrf_exempt
+def add_source_to_user(request):
+    """Add a source to user profile"""
+    try:
+        data = json.loads(request.body)
+        username = data.get('username')
+        source_uid = data.get('source_uid')
+        
+        # Validate required fields
+        if not username:
+            return JsonResponse({'error': 'Username is required'}, status=400)
+        if not source_uid:
+            return JsonResponse({'error': 'Source UID is required'}, status=400)
+        
+        # Get user account
+        user_response = supabase_client.get_client().table('user_accounts').select('*').eq('username', username).execute()
+        if not user_response.data:
+            return JsonResponse({'error': 'User not found'}, status=404)
+        
+        user_id = user_response.data[0]['id']
+        
+        # Check if source exists
+        source_response = supabase_client.get_client().table('carbon_sources').select('*').eq('uid', source_uid).execute()
+        if not source_response.data:
+            return JsonResponse({'error': 'Source not found'}, status=404)
+        
+        # Get or create user profile
+        profile_response = supabase_client.get_client().table('user_profiles').select('*').eq('user_id', user_id).execute()
+        if not profile_response.data:
+            # Create user profile
+            profile_data = {'user_id': user_id}
+            profile_response = supabase_client.get_client().table('user_profiles').insert(profile_data).execute()
+            if not profile_response.data:
+                return JsonResponse({'error': 'Failed to create user profile'}, status=500)
+            profile_id = profile_response.data[0]['id']
+        else:
+            profile_id = profile_response.data[0]['id']
+        
+        # Check if source is already added to user profile
+        existing_response = supabase_client.get_client().table('user_profile_sources').select('*').eq('user_profile_id', profile_id).eq('carbon_source_uid', source_uid).execute()
+        if existing_response.data:
+            return JsonResponse({'error': 'Source already added to user profile'}, status=400)
+        
+        # Add source to user profile
+        profile_source_data = {
+            'user_profile_id': profile_id,
+            'carbon_source_uid': source_uid
+        }
+        result = supabase_client.get_client().table('user_profile_sources').insert(profile_source_data).execute()
+        
+        if result.data:
+            return JsonResponse({
+                'message': 'Source added to user profile successfully',
+                'data': result.data[0]
+            }, status=201)
+        else:
+            return JsonResponse({'error': 'Failed to add source to user profile'}, status=500)
+            
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+@require_http_methods(["GET"])
+@csrf_exempt
+def get_user_records_by_timeframe(request):
+    """Get user records by timeframe and source"""
+    try:
+        username = request.GET.get('username')
+        source_uid = request.GET.get('source_uid')
+        start_date = request.GET.get('start_date')
+        end_date = request.GET.get('end_date')
+        
+        # Validate required fields
+        if not username:
+            return JsonResponse({'error': 'Username is required'}, status=400)
+        if not source_uid:
+            return JsonResponse({'error': 'Source UID is required'}, status=400)
+        if not start_date or not end_date:
+            return JsonResponse({'error': 'Start date and end date are required'}, status=400)
+        
+        # Get user account
+        user_response = supabase_client.get_client().table('user_accounts').select('*').eq('username', username).execute()
+        if not user_response.data:
+            return JsonResponse({'error': 'User not found'}, status=404)
+        
+        user_id = user_response.data[0]['id']
+        
+        # Get user profile
+        profile_response = supabase_client.get_client().table('user_profiles').select('*').eq('user_id', user_id).execute()
+        if not profile_response.data:
+            return JsonResponse({'error': 'User profile not found'}, status=404)
+        
+        profile_id = profile_response.data[0]['id']
+        
+        # Get carbon records for the user, source, and timeframe
+        records_response = supabase_client.get_client().table('carbon_records').select('*').eq('user_profile_id', profile_id).eq('carbon_source_uid', source_uid).gte('date', start_date).lte('date', end_date).execute()
+        
+        records = records_response.data or []
+        
+        return JsonResponse({
+            'records': records,
+            'count': len(records),
+            'timeframe': {
+                'start_date': start_date,
+                'end_date': end_date
+            }
+        })
+        
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+@require_http_methods(["DELETE"])
+@csrf_exempt
+def remove_source_from_user(request):
+    """Remove a source from user profile"""
+    try:
+        data = json.loads(request.body)
+        username = data.get('username')
+        source_uid = data.get('source_uid')
+        
+        # Validate required fields
+        if not username:
+            return JsonResponse({'error': 'Username is required'}, status=400)
+        if not source_uid:
+            return JsonResponse({'error': 'Source UID is required'}, status=400)
+        
+        # Get user account
+        user_response = supabase_client.get_client().table('user_accounts').select('*').eq('username', username).execute()
+        if not user_response.data:
+            return JsonResponse({'error': 'User not found'}, status=404)
+        
+        user_id = user_response.data[0]['id']
+        
+        # Get user profile
+        profile_response = supabase_client.get_client().table('user_profiles').select('*').eq('user_id', user_id).execute()
+        if not profile_response.data:
+            return JsonResponse({'error': 'User profile not found'}, status=404)
+        
+        profile_id = profile_response.data[0]['id']
+        
+        # Check if source exists in user profile
+        existing_response = supabase_client.get_client().table('user_profile_sources').select('*').eq('user_profile_id', profile_id).eq('carbon_source_uid', source_uid).execute()
+        if not existing_response.data:
+            return JsonResponse({'error': 'Source not found in user profile'}, status=404)
+        
+        # Remove source from user profile
+        result = supabase_client.get_client().table('user_profile_sources').delete().eq('user_profile_id', profile_id).eq('carbon_source_uid', source_uid).execute()
+        
+        return JsonResponse({
+            'message': 'Source removed from user profile successfully'
+        })
+        
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+@require_http_methods(["GET"])
+@csrf_exempt
+def get_user_sources(request):
+    """Get all sources in user's profile"""
+    try:
+        username = request.GET.get('username')
+        
+        # Validate required fields
+        if not username:
+            return JsonResponse({'error': 'Username is required'}, status=400)
+        
+        # Get user account
+        user_response = supabase_client.get_client().table('user_accounts').select('*').eq('username', username).execute()
+        if not user_response.data:
+            return JsonResponse({'error': 'User not found'}, status=404)
+        
+        user_id = user_response.data[0]['id']
+        
+        # Get user profile
+        profile_response = supabase_client.get_client().table('user_profiles').select('*').eq('user_id', user_id).execute()
+        if not profile_response.data:
+            return JsonResponse({'error': 'User profile not found'}, status=404)
+        
+        profile_id = profile_response.data[0]['id']
+        
+        # Get user's sources via join
+        sources_response = supabase_client.get_client().table('user_profile_sources').select('carbon_source_uid, carbon_sources(*)').eq('user_profile_id', profile_id).execute()
+        
+        sources = []
+        if sources_response.data:
+            for item in sources_response.data:
+                if item.get('carbon_sources'):
+                    sources.append(item['carbon_sources'])
+        
+        return JsonResponse({
+            'sources': sources,
+            'count': len(sources)
+        })
+        
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)

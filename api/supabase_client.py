@@ -71,16 +71,16 @@ class SupabaseClient:
         return self.client.table('carbon_sources').insert(data).execute()
     
     def get_carbon_source(self, source_id):
-        """Get carbon source by ID"""
-        return self.client.table('carbon_sources').select('*').eq('id', source_id).execute()
-    
+        """Get a specific carbon source by UID"""
+        return self.client.table('carbon_sources').select('*').eq('uid', source_id).execute()
+
     def update_carbon_source(self, source_id, data):
-        """Update carbon source"""
-        return self.client.table('carbon_sources').update(data).eq('id', source_id).execute()
-    
+        """Update a carbon source"""
+        return self.client.table('carbon_sources').update(data).eq('uid', source_id).execute()
+
     def delete_carbon_source(self, source_id):
-        """Delete carbon source"""
-        return self.client.table('carbon_sources').delete().eq('id', source_id).execute()
+        """Delete a carbon source"""
+        return self.client.table('carbon_sources').delete().eq('uid', source_id).execute()
     
     def list_carbon_sources(self):
         """List all carbon sources"""
