@@ -11,47 +11,129 @@ import json
 def user_list(request):
     """Handle user list operations"""
     if request.method == 'GET':
-        # Sample user data
-        users = [
-            {'id': 1, 'name': 'John Doe', 'email': 'john@example.com'},
-            {'id': 2, 'name': 'Jane Smith', 'email': 'jane@example.com'},
-            {'id': 3, 'name': 'Bob Johnson', 'email': 'bob@example.com'}
-        ]
-        return JsonResponse({'users': users})
+        try:
+            # Get all users from database
+            users = User.objects.all().values('id', 'username', 'email', 'first_name', 'last_name', 'date_joined')
+            users_list = []
+            for user in users:
+                users_list.append({
+                    'id': user['id'],
+                    'username': user['username'],
+                    'email': user['email'],
+                    'first_name': user['first_name'],
+                    'last_name': user['last_name'],
+                    'date_joined': user['date_joined'].isoformat() if user['date_joined'] else None
+                })
+            return JsonResponse({'users': users_list})
+        except Exception as e:
+            return JsonResponse({'error': str(e)}, status=500)
     
     elif request.method == 'POST':
         try:
             data = json.loads(request.body)
-            # In a real app, you would save to database here
+            username = data.get('username')
+            email = data.get('email')
+            password = data.get('password')
+            first_name = data.get('first_name', '')
+            last_name = data.get('last_name', '')
+            
+            # Validate required fields
+            if not all([username, email, password]):
+                return JsonResponse({
+                    'error': 'Username, email, and password are required'
+                }, status=400)
+            
+            # Check if user already exists
+            if User.objects.filter(username=username).exists():
+                return JsonResponse({
+                    'error': 'Username already exists'
+                }, status=400)
+            
+            if User.objects.filter(email=email).exists():
+                return JsonResponse({
+                    'error': 'Email already exists'
+                }, status=400)
+            
+            # Create new user
+            user = User.objects.create_user(
+                username=username,
+                email=email,
+                password=password,
+                first_name=first_name,
+                last_name=last_name
+            )
+            
             return JsonResponse({
                 'message': 'User created successfully',
                 'user': {
-                    'id': 4,
-                    'name': data.get('name', ''),
-                    'email': data.get('email', '')
+                    'id': user.id,
+                    'username': user.username,
+                    'email': user.email,
+                    'first_name': user.first_name,
+                    'last_name': user.last_name
                 }
             }, status=201)
+            
         except json.JSONDecodeError:
             return JsonResponse({'error': 'Invalid JSON'}, status=400)
+        except Exception as e:
+            return JsonResponse({'error': str(e)}, status=500)
 
 @require_http_methods(["GET", "PUT", "DELETE"])
 @csrf_exempt
 def user_detail(request, user_id):
     """Handle individual user operations"""
-    # Sample user data
-    sample_user = {'id': user_id, 'name': f'User {user_id}', 'email': f'user{user_id}@example.com'}
+    try:
+        # Get user from database
+        user = User.objects.get(id=user_id)
+    except User.DoesNotExist:
+        return JsonResponse({'error': 'User not found'}, status=404)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
     
     if request.method == 'GET':
-        return JsonResponse({'user': sample_user})
+        user_data = {
+            'id': user.id,
+            'username': user.username,
+            'email': user.email,
+            'first_name': user.first_name,
+            'last_name': user.last_name,
+            'date_joined': user.date_joined.isoformat() if user.date_joined else None,
+            'is_active': user.is_active
+        }
+        return JsonResponse({'user': user_data})
     
     elif request.method == 'PUT':
         try:
             data = json.loads(request.body)
-            # In a real app, you would update the database here
+            
+            # Update user fields
+            if 'email' in data:
+                # Check if email is already taken by another user
+                if User.objects.filter(email=data['email']).exclude(id=user_id).exists():
+                    return JsonResponse({
+                        'error': 'Email already exists'
+                    }, status=400)
+                user.email = data['email']
+            
+            if 'first_name' in data:
+                user.first_name = data['first_name']
+            
+            if 'last_name' in data:
+                user.last_name = data['last_name']
+            
+            if 'is_active' in data:
+                user.is_active = data['is_active']
+            
+            user.save()
+            
             updated_user = {
-                'id': user_id,
-                'name': data.get('name', sample_user['name']),
-                'email': data.get('email', sample_user['email'])
+                'id': user.id,
+                'username': user.username,
+                'email': user.email,
+                'first_name': user.first_name,
+                'last_name': user.last_name,
+                'is_active': user.is_active
             }
             return JsonResponse({
                 'message': 'User updated successfully',
@@ -59,12 +141,18 @@ def user_detail(request, user_id):
             })
         except json.JSONDecodeError:
             return JsonResponse({'error': 'Invalid JSON'}, status=400)
+        except Exception as e:
+            return JsonResponse({'error': str(e)}, status=500)
     
     elif request.method == 'DELETE':
-        # In a real app, you would delete from database here
-        return JsonResponse({
-            'message': f'User {user_id} deleted successfully'
-        })
+        try:
+            username = user.username
+            user.delete()
+            return JsonResponse({
+                'message': f'User {username} (ID: {user_id}) deleted successfully'
+            })
+        except Exception as e:
+            return JsonResponse({'error': str(e)}, status=500)
 
 @require_http_methods(["POST"])
 @csrf_exempt
