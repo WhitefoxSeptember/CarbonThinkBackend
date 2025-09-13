@@ -1,11 +1,13 @@
-from django.urls import path
+from django.urls import path, include
 from . import views
 
-app_name = 'api'
-
 urlpatterns = [
-    path('', views.index, name='index'),
+    # API root and health check
+    path('', views.index, name='api_root'),
     path('health/', views.health_check, name='health_check'),
-    path('users/', views.user_list, name='user_list'),
-    path('users/<int:user_id>/', views.user_detail, name='user_detail'),
+    
+    # Include category-specific URL modules
+    path('accounts/', include('api.url_modules.accounts')),
+    path('activities/', include('api.url_modules.activities')),
+    path('sources/', include('api.url_modules.sources')),
 ]
