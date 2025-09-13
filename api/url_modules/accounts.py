@@ -10,8 +10,6 @@ urlpatterns = [
     # User management endpoints
     path('users/', views.user_list, name='user_list'),
     path('users/<int:user_id>/', views.user_detail, name='user_detail'),
-
-    path
     
     # Authentication endpoints (to be implemented)
     # path('register/', views.user_register, name='user_register'),
