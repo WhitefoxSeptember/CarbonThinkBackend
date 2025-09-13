@@ -11,18 +11,18 @@ def carbon_consumption(request):
     """Get total carbon consumption for a user within a timeframe"""
     try:
         data = json.loads(request.body)
-        username = data.get('username')
+        email = data.get('email')
         start_date = data.get('start_date')
         end_date = data.get('end_date')
         
         # Validate required fields
-        if not username:
-            return JsonResponse({'error': 'Username is required'}, status=400)
+        if not email:
+            return JsonResponse({'error': 'Email is required'}, status=400)
         if not start_date or not end_date:
             return JsonResponse({'error': 'Both start_date and end_date are required'}, status=400)
         
-        # Validate user exists in Supabase
-        user_response = supabase_client.get_client().table('user_accounts').select('*').eq('username', username).execute()
+        # Validate user exists in Supabase by email
+        user_response = supabase_client.get_client().table('user_accounts').select('*').eq('email', email).execute()
         if not user_response.data:
             return JsonResponse({'error': 'User not found'}, status=404)
         
@@ -50,7 +50,7 @@ def carbon_consumption(request):
         record_count = len(records)
         
         return JsonResponse({
-            'username': username,
+            'email': email,
             'timeframe': {
                 'start_date': start_date,
                 'end_date': end_date

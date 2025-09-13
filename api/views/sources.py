@@ -181,17 +181,17 @@ def add_source_to_user(request):
     """Add a source to user profile"""
     try:
         data = json.loads(request.body)
-        username = data.get('username')
+        email = data.get('email')
         source_uid = data.get('source_uid')
         
         # Validate required fields
-        if not username:
-            return JsonResponse({'error': 'Username is required'}, status=400)
+        if not email:
+            return JsonResponse({'error': 'Email is required'}, status=400)
         if not source_uid:
             return JsonResponse({'error': 'Source UID is required'}, status=400)
         
-        # Get user account
-        user_response = supabase_client.get_client().table('user_accounts').select('*').eq('username', username).execute()
+        # Get user account by email
+        user_response = supabase_client.get_client().table('user_accounts').select('*').eq('email', email).execute()
         if not user_response.data:
             return JsonResponse({'error': 'User not found'}, status=404)
         
@@ -244,21 +244,21 @@ def add_source_to_user(request):
 def get_user_records_by_timeframe(request):
     """Get user records by timeframe and source"""
     try:
-        username = request.GET.get('username')
+        email = request.GET.get('email')
         source_uid = request.GET.get('source_uid')
         start_date = request.GET.get('start_date')
         end_date = request.GET.get('end_date')
         
         # Validate required fields
-        if not username:
-            return JsonResponse({'error': 'Username is required'}, status=400)
+        if not email:
+            return JsonResponse({'error': 'Email is required'}, status=400)
         if not source_uid:
             return JsonResponse({'error': 'Source UID is required'}, status=400)
         if not start_date or not end_date:
             return JsonResponse({'error': 'Start date and end date are required'}, status=400)
         
-        # Get user account
-        user_response = supabase_client.get_client().table('user_accounts').select('*').eq('username', username).execute()
+        # Get user account by email
+        user_response = supabase_client.get_client().table('user_accounts').select('*').eq('email', email).execute()
         if not user_response.data:
             return JsonResponse({'error': 'User not found'}, status=404)
         
@@ -272,7 +272,7 @@ def get_user_records_by_timeframe(request):
         profile_id = profile_response.data[0]['id']
         
         # Get carbon records for the user, source, and timeframe
-        records_response = supabase_client.get_client().table('carbon_records').select('*').eq('user_profile_id', profile_id).eq('carbon_source_uid', source_uid).gte('date', start_date).lte('date', end_date).execute()
+        records_response = supabase_client.get_client().table('carbon_records').select('*').eq('user_id', user_id).eq('source_uid', source_uid).gte('date', start_date).lte('date', end_date).execute()
         
         records = records_response.data or []
         
@@ -294,17 +294,17 @@ def remove_source_from_user(request):
     """Remove a source from user profile"""
     try:
         data = json.loads(request.body)
-        username = data.get('username')
+        email = data.get('email')
         source_uid = data.get('source_uid')
         
         # Validate required fields
-        if not username:
-            return JsonResponse({'error': 'Username is required'}, status=400)
+        if not email:
+            return JsonResponse({'error': 'Email is required'}, status=400)
         if not source_uid:
             return JsonResponse({'error': 'Source UID is required'}, status=400)
         
-        # Get user account
-        user_response = supabase_client.get_client().table('user_accounts').select('*').eq('username', username).execute()
+        # Get user account by email
+        user_response = supabase_client.get_client().table('user_accounts').select('*').eq('email', email).execute()
         if not user_response.data:
             return JsonResponse({'error': 'User not found'}, status=404)
         
@@ -339,14 +339,14 @@ def remove_source_from_user(request):
 def get_user_sources(request):
     """Get all sources in user's profile"""
     try:
-        username = request.GET.get('username')
+        email = request.GET.get('email')
         
         # Validate required fields
-        if not username:
-            return JsonResponse({'error': 'Username is required'}, status=400)
+        if not email:
+            return JsonResponse({'error': 'Email is required'}, status=400)
         
-        # Get user account
-        user_response = supabase_client.get_client().table('user_accounts').select('*').eq('username', username).execute()
+        # Get user account by email
+        user_response = supabase_client.get_client().table('user_accounts').select('*').eq('email', email).execute()
         if not user_response.data:
             return JsonResponse({'error': 'User not found'}, status=404)
         
