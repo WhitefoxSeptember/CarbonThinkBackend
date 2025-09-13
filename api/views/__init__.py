@@ -1,24 +1,15 @@
-# Import all views from the new modular structure for backward compatibility
-from .views.accounts import (
+# Import all views for backward compatibility
+from .accounts import (
     user_list,
     user_detail,
     user_register,
     user_login,
     user_logout
 )
-from .views.activities import (
-    activity_list,
-    activity_detail,
-    activity_stats
-)
-from .views.sources import (
-    source_list,
-    source_detail,
-    source_categories,
-    calculate_footprint
-)
+from .activities import *
+from .sources import *
 
-# Keep the original utility views
+# Keep the original views for backward compatibility
 from django.http import JsonResponse
 
 def index(request):
@@ -39,6 +30,3 @@ def health_check(request):
         'status': 'healthy',
         'message': 'API is running successfully'
     })
-
-# All view functions are now imported from their respective modules
-# This file serves as a backward compatibility layer

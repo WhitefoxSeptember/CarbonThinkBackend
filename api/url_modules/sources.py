@@ -1,5 +1,5 @@
 from django.urls import path
-from .. import views
+from ..views import sources
 
 # Carbon Footprint Source Management URLs
 # Handles carbon sources, calculations, and footprint data
@@ -7,11 +7,12 @@ from .. import views
 app_name = 'sources'
 
 urlpatterns = [
-    # Carbon footprint source endpoints (to be implemented)
-    # path('', views.carbon_source_list, name='carbon_source_list'),
-    # path('<int:source_id>/', views.carbon_source_detail, name='carbon_source_detail'),
-    # path('categories/', views.carbon_categories, name='carbon_categories'),
-    # path('calculate/', views.calculate_footprint, name='calculate_footprint'),
+    # Carbon footprint source endpoints
+    path('', sources.source_list, name='source_list'),
+    path('<int:source_id>/', sources.source_detail, name='source_detail'),
+    path('categories/', sources.source_categories, name='source_categories'),
+    path('calculate/', sources.calculate_footprint, name='calculate_footprint'),
+    # Future endpoints (to be implemented)
     # path('user/<int:user_id>/footprint/', views.user_footprint, name='user_footprint'),
     # path('reports/', views.footprint_reports, name='footprint_reports'),
     # path('emissions/', views.emission_factors, name='emission_factors'),
